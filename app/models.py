@@ -21,10 +21,12 @@ class Payment(Base):
     amount = Column(Numeric(10, 2), nullable=False)
     currency = Column(String(3), nullable=False)
     description = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    metadata_ = Column("metadata", JSON, nullable=True)
     status = Column(SAEnum(PaymentStatus), default=PaymentStatus.pending, nullable=False)
     idempotency_key = Column(String(255), unique=True, nullable=False, index=True)
     webhook_url = Column(String(1024), nullable=False)
+    webhook_retry_count = Column(Integer, default=0, nullable=False)
+    webhook_last_error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     processed_at = Column(DateTime, nullable=True)
 

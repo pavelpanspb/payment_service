@@ -1,13 +1,13 @@
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.logging_conf import setup_logging
 from app.outbox_publisher import start_outbox_publisher
 from app.router import router
 
-logging.basicConfig(level=logging.INFO)
+setup_logging()
 
 
 @asynccontextmanager

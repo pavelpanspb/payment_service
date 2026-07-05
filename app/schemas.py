@@ -21,6 +21,8 @@ class PaymentResponse(BaseModel):
     description: str | None
     metadata: dict[str, Any] | None
     webhook_url: str
+    webhook_retry_count: int
+    webhook_last_error: str | None
     created_at: datetime
     processed_at: datetime | None
 

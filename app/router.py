@@ -1,67 +1,33 @@
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.dependencies import verify_api_key
-from app.models import Outbox, Payment, PaymentStatus
-from app.schemas import CreatePaymentRequest, PaymentCreatedResponse, PaymentResponse
+from app.schemas import (
+    CreatePaymentRequest,
+    PaymentCreatedResponse,
+    PaymentResponse,
+)
+from app.services.payment import PaymentService
+from app.unit_of_work import UnitOfWork
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(verify_api_key)])
+
+
+def get_uow(session=Depends(get_session)) -> UnitOfWork:
+    return UnitOfWork(session)
 
 
 @router.post("/payments", status_code=202, response_model=PaymentCreatedResponse)
 async def create_payment(
     body: CreatePaymentRequest,
     idempotency_key: str = Header(...),
-    session: AsyncSession = Depends(get_session),
+    uow: UnitOfWork = Depends(get_uow),
 ):
-    existing = await session.execute(
-        select(Payment).where(Payment.idempotency_key == idempotency_key)
-    )
-    existing_payment = existing.scalar_one_or_none()
-    if existing_payment:
-        return PaymentCreatedResponse(
-            payment_id=str(existing_payment.id),
-            status=existing_payment.status.value,
-            created_at=existing_payment.created_at,
-        )
-
-    payment = Payment(
-        id=uuid.uuid4(),
-        amount=body.amount,
-        currency=body.currency,
-        description=body.description,
-        metadata=body.metadata,
-        status=PaymentStatus.pending,
-        idempotency_key=idempotency_key,
-        webhook_url=str(body.webhook_url),
-        created_at=datetime.utcnow(),
-    )
-    session.add(payment)
-
-    outbox = Outbox(
-        id=uuid.uuid4(),
-        event_type="payment.created",
-        aggregate_type="payment",
-        aggregate_id=payment.id,
-        payload={
-            "payment_id": str(payment.id),
-            "amount": str(body.amount),
-            "currency": body.currency,
-            "description": body.description,
-            "metadata": body.metadata,
-            "webhook_url": str(body.webhook_url),
-            "idempotency_key": idempotency_key,
-        },
-        created_at=datetime.utcnow(),
-    )
-    session.add(outbox)
-
-    await session.commit()
+    service = PaymentService(uow)
+    payment = await service.create_payment(body, idempotency_key)
+    await uow.commit()
 
     return PaymentCreatedResponse(
         payment_id=str(payment.id),
@@ -73,15 +39,15 @@ async def create_payment(
 @router.get("/payments/{payment_id}", response_model=PaymentResponse)
 async def get_payment(
     payment_id: str,
-    session: AsyncSession = Depends(get_session),
+    uow: UnitOfWork = Depends(get_uow),
 ):
     try:
         uid = uuid.UUID(payment_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid payment ID")
 
-    result = await session.execute(select(Payment).where(Payment.id == uid))
-    payment = result.scalar_one_or_none()
+    service = PaymentService(uow)
+    payment = await service.get_payment(uid)
     if payment is None:
         raise HTTPException(status_code=404, detail="Payment not found")
 
@@ -91,8 +57,10 @@ async def get_payment(
         amount=float(payment.amount),
         currency=payment.currency,
         description=payment.description,
-        metadata=payment.metadata,
+        metadata=payment.metadata_,
         webhook_url=payment.webhook_url,
+        webhook_retry_count=payment.webhook_retry_count,
+        webhook_last_error=payment.webhook_last_error,
         created_at=payment.created_at,
         processed_at=payment.processed_at,
     )
