@@ -18,7 +18,9 @@ class OutboxPublisher:
         self._exchange: aio_pika.Exchange | None = None
 
     async def start(self) -> None:
-        self._connection = await aio_pika.connect_robust(settings.rabbitmq_url)
+        self._connection = await aio_pika.connect_robust(
+            settings.rabbitmq_url, timeout=5
+        )
         self._channel = await self._connection.channel()
         self._exchange = await self._channel.declare_exchange(
             "payments", aio_pika.ExchangeType.TOPIC, durable=True
@@ -26,18 +28,24 @@ class OutboxPublisher:
         logger.info("Connected to RabbitMQ")
 
     async def stop(self) -> None:
-        if self._connection:
+        if self._connection and not self._connection.is_closed:
             await self._connection.close()
-            logger.info("Disconnected from RabbitMQ")
+        self._connection = None
+        self._channel = None
+        self._exchange = None
+        logger.info("Disconnected from RabbitMQ")
 
     async def run_forever(self) -> None:
-        await self.start()
-        try:
-            while True:
-                await self._publish_batch()
-                await asyncio.sleep(settings.outbox_poll_interval)
-        finally:
-            await self.stop()
+        while True:
+            try:
+                await self.start()
+                while True:
+                    await self._publish_batch()
+                    await asyncio.sleep(settings.outbox_poll_interval)
+            except Exception as e:
+                logger.error("Connection lost: %s. Reconnecting in 5s...", e)
+                await self.stop()
+                await asyncio.sleep(5)
 
     async def _publish_batch(self) -> None:
         async with async_session_factory() as session:

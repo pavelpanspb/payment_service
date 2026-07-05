@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.models import Outbox, Payment, PaymentStatus
 from app.schemas import CreatePaymentRequest
@@ -22,7 +22,7 @@ class PaymentService:
             status=PaymentStatus.pending,
             idempotency_key=idempotency_key,
             webhook_url=str(body.webhook_url),
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
 
         created = await self.uow.payments.try_create_with_idempotency(payment)
@@ -41,7 +41,7 @@ class PaymentService:
                     "webhook_url": str(body.webhook_url),
                     "idempotency_key": idempotency_key,
                 },
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
             )
             await self.uow.outbox.add(outbox)
             return created

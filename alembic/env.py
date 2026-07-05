@@ -1,4 +1,5 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -31,6 +32,9 @@ def do_run_migrations(connection: Connection):
 
 async def run_async_migrations():
     configuration = config.get_section(config.config_ini_section)
+    url = os.environ.get("DATABASE_URL")
+    if url:
+        configuration["sqlalchemy.url"] = url
     connectable = async_engine_from_config(
         configuration,
         prefix="sqlalchemy.",

@@ -1,6 +1,6 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime, Enum as SAEnum, Integer, JSON, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -27,7 +27,7 @@ class Payment(Base):
     webhook_url = Column(String(1024), nullable=False)
     webhook_retry_count = Column(Integer, default=0, nullable=False)
     webhook_last_error = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     processed_at = Column(DateTime, nullable=True)
 
 
@@ -39,7 +39,7 @@ class Outbox(Base):
     aggregate_type = Column(String(255), nullable=False)
     aggregate_id = Column(UUID(as_uuid=True), nullable=False)
     payload = Column(JSON, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     processed_at = Column(DateTime, nullable=True)
     retry_count = Column(Integer, default=0)
     last_error = Column(Text, nullable=True)

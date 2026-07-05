@@ -15,15 +15,17 @@ class PaymentRepository:
         stmt = (
             pg_insert(Payment)
             .values(
-                id=payment.id,
-                amount=payment.amount,
-                currency=payment.currency,
-                description=payment.description,
-                metadata=payment.metadata_,
-                status=payment.status.value,
-                idempotency_key=payment.idempotency_key,
-                webhook_url=payment.webhook_url,
-                created_at=payment.created_at,
+                {
+                    Payment.id: payment.id,
+                    Payment.amount: payment.amount,
+                    Payment.currency: payment.currency,
+                    Payment.description: payment.description,
+                    Payment.metadata_: payment.metadata_,
+                    Payment.status: payment.status.value,
+                    Payment.idempotency_key: payment.idempotency_key,
+                    Payment.webhook_url: payment.webhook_url,
+                    Payment.created_at: payment.created_at,
+                }
             )
             .on_conflict_do_nothing(index_elements=["idempotency_key"])
             .returning(Payment)
